@@ -13,7 +13,8 @@ A chess game you play in the browser against a computer opponent. It has no depe
     row moves one square at a time; only pawns on their normal starting row can move two.
 - Full rules: castling, en passant, promotion (with a piece picker), check, checkmate, stalemate,
   the 50-move rule, threefold repetition and insufficient material
-- Move by clicking or by dragging pieces (works with touch)
+- Move by clicking or by dragging pieces
+- Works on phones in portrait and landscape: tap or drag with a finger, and the status line stays above the board
 - Play as White, Black or a random colour
 - Four difficulty levels: Easy, Medium, Hard, Expert
 - Undo, board flip, hints, a move list in algebraic notation, captured pieces and the material balance

@@ -29,3 +29,16 @@ random noise to their choices.
 
 Move generation is checked against standard perft counts:
 `node -e "const C=require('./engine.js'); console.log(new C.Game().perft(4))"` → `197281`.
+
+## Phone apps
+Download the latest builds from the [Releases page](https://github.com/Tarxander/Chess-random/releases).
+
+- **Android (`.apk`):** open the file on your phone and allow installing from that source when asked.
+  It's signed with a temporary debug key, so you may need to uninstall the old version before installing a newer one.
+- **iPhone (`.ipa`):** the file is unsigned, because iPhones only run apps signed by Apple. Install it with a
+  sideloading tool such as AltStore or Sideloadly, which signs it with your own Apple ID. Apps signed with a free
+  Apple ID stop working after 7 days and must be reinstalled.
+
+**Making a new release:** go to Actions → **Build apps** → **Run workflow**, enter a version number (e.g. `1.1.0`),
+and run it. In a few minutes it builds both apps with [Capacitor](https://capacitorjs.com) and publishes them
+as release `v<version>`.

@@ -1,0 +1,17 @@
+{
+  "name": "chess-random",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chess vs AI, with a Random mode. Web app packaged for Android and iOS with Capacitor.",
+  "scripts": {
+    "build:web": "rm -rf www && mkdir -p www && cp index.html engine.js www/",
+    "test": "node -e \"const C=require('./engine.js');const n=new C.Game().perft(4);if(n!==197281)throw new Error('perft '+n);console.log('perft ok')\""
+  },
+  "devDependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "8.5.3",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/ios": "8.5.3"
+  }
+}

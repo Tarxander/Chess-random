@@ -1,0 +1,14 @@
+{
+  "appId": "com.tarxander.chessrandom",
+  "appName": "Chess vs AI",
+  "webDir": "www",
+  "backgroundColor": "#1e1f24",
+  "ios": {
+    "contentInset": "always"
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "DARK"
+    }
+  }
+}

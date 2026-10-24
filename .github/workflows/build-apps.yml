@@ -1,0 +1,110 @@
+# Builds the Android APK and iOS IPA with Capacitor and publishes them as a GitHub release.
+# Run it from the Actions tab ("Build apps" -> "Run workflow") and enter a version number.
+name: Build apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version number (e.g. 1.0.0)
+        required: true
+        default: 1.0.0
+
+permissions:
+  contents: write
+
+env:
+  VERSION: ${{ inputs.version }}
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check version format
+        run: '[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Version must look like 1.2.3"; exit 1; }'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:web
+      - run: npx cap add android
+      - run: npx capacitor-assets generate --android --iconBackgroundColor '#1e1f24' --splashBackgroundColor '#1e1f24'
+      - name: Set app version
+        run: |
+          sed -i "s/versionCode 1$/versionCode ${{ github.run_number }}/; s/versionName \"1.0\"/versionName \"$VERSION\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - run: mv android/app/build/outputs/apk/debug/app-debug.apk "ChessVsAI-$VERSION.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: ChessVsAI-*.apk
+          if-no-files-found: error
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:web
+      - run: npx cap add ios
+      - run: npx capacitor-assets generate --ios --iconBackgroundColor '#1e1f24' --splashBackgroundColor '#1e1f24'
+      - name: Set app version
+        run: |
+          sed -i '' "s/MARKETING_VERSION = 1.0;/MARKETING_VERSION = $VERSION;/; s/CURRENT_PROJECT_VERSION = 1;/CURRENT_PROJECT_VERSION = ${{ github.run_number }};/" ios/App/App.xcodeproj/project.pbxproj
+          grep -E "MARKETING_VERSION|CURRENT_PROJECT_VERSION" ios/App/App.xcodeproj/project.pbxproj
+      - name: Build app (unsigned)
+        run: |
+          xcodebuild -version
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry "ChessVsAI-$VERSION-unsigned.ipa" Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipa
+          path: ChessVsAI-*.ipa
+          if-no-files-found: error
+
+  release:
+    needs: [android, ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'NOTES'
+          Chess vs AI: play against the computer in Classic or Random mode.
+
+          **Android (`.apk`):** download it on your phone, open it, and allow installing from this source when asked.
+          This build is signed with a temporary debug key, so to install a newer release you may need to uninstall the old one first.
+
+          **iPhone (`.ipa`):** this file is **unsigned**. iPhones only run apps signed by Apple, so it can't be installed by tapping it.
+          Install it with a sideloading tool such as AltStore or Sideloadly, which signs it with your own Apple ID.
+
+          You can also play in the browser without installing anything: https://tarxander.github.io/Chess-random/
+          NOTES
+          gh release create "v$VERSION" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Chess vs AI v$VERSION" --notes-file notes.md

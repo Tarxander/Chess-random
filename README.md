@@ -7,8 +7,10 @@ A chess game you play in the browser against a computer opponent. It has no depe
 ## Features
 - **Two modes**, switched with the Classic / Random toggle at the top of the panel:
   - **Classic:** standard chess (the default).
-  - **Random:** each side's back-row pieces are shuffled separately every game. Bishops always
-    land on opposite colours and castling is disabled.
+  - **Random:** each side's 16 pawns and pieces are shuffled together across its first two rows,
+    separately for each side, every game. Bishops always land on opposite colours, setups where a
+    king starts in check are rerolled, and castling is disabled. A pawn that starts on the back
+    row moves one square at a time; only pawns on their normal starting row can move two.
 - Full rules: castling, en passant, promotion (with a piece picker), check, checkmate, stalemate,
   the 50-move rule, threefold repetition and insufficient material
 - Move by clicking or by dragging pieces (works with touch)

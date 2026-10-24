@@ -146,29 +146,39 @@
   const $ = (id) => document.getElementById(id);
   const boardEl = $('board'), statusEl = $('status');
 
-  // Shuffle a back rank; bishops are kept on opposite-coloured squares.
-  function randomBackRank() {
-    const rank = new Array(8).fill(null);
+  // Shuffle all 16 of one side's pieces across its two home rows (front row first, then back row).
+  // Bishops are kept on opposite-coloured squares.
+  function randomSide() {
+    const cells = new Array(16).fill(null);
+    const shade = (i) => ((i >> 3) + (i & 7)) & 1; // same parity pattern as the real board
     const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-    rank[pick([0, 2, 4, 6])] = 'b';
-    rank[pick([1, 3, 5, 7])] = 'b';
-    const rest = ['k', 'q', 'r', 'r', 'n', 'n'];
+    const all = [...cells.keys()];
+    cells[pick(all.filter((i) => shade(i) === 0))] = 'b';
+    cells[pick(all.filter((i) => shade(i) === 1))] = 'b';
+    const rest = ['k', 'q', 'r', 'r', 'n', 'n', 'p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'];
     for (let i = rest.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [rest[i], rest[j]] = [rest[j], rest[i]];
     }
-    for (let i = 0; i < 8; i++) if (!rank[i]) rank[i] = rest.pop();
-    return rank.join('');
+    for (let i = 0; i < 16; i++) if (!cells[i]) cells[i] = rest.pop();
+    return { front: cells.slice(0, 8).join(''), back: cells.slice(8).join('') };
   }
 
   // Each side gets its own shuffle. Castling is off since kings and rooks start anywhere.
+  // A long-range piece on the front row can see straight down to the enemy king, so
+  // setups where either king starts in check are rerolled.
   function randomStartFen() {
-    return `${randomBackRank()}/pppppppp/8/8/8/8/PPPPPPPP/${randomBackRank().toUpperCase()} w - - 0 1`;
+    for (;;) {
+      const b = randomSide(), w = randomSide();
+      const fen = `${b.back}/${b.front}/8/8/8/8/${w.front.toUpperCase()}/${w.back.toUpperCase()} w - - 0 1`;
+      const g = new Game(fen);
+      if (!g.inCheck('w') && !g.inCheck('b')) return fen;
+    }
   }
 
   const MODES = {
     classic: { title: '♞ Chess vs AI', desc: 'Standard chess.' },
-    random: { title: '🎲 Random Chess vs AI', desc: 'Both sides\u2019 back-row pieces are shuffled every game. No castling.' },
+    random: { title: '🎲 Random Chess vs AI', desc: 'Both sides\u2019 pawns and pieces are shuffled across their first two rows every game. No castling.' },
   };
   let mode = 'classic';
 

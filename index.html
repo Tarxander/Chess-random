@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chess vs AI</title>
+<style>
+  :root {
+    --bg: #1e1f24; --panel: #2a2c33; --text: #e8e6e3; --muted: #9a9ca5;
+    --light: #eed9b6; --dark: #b58863; --accent: #6aa84f;
+    --sel: rgba(255, 215, 0, .55); --last: rgba(155, 199, 0, .45); --check: rgba(230, 40, 40, .75);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex; justify-content: center; align-items: flex-start; padding: 24px 16px;
+  }
+  .app { display: flex; gap: 24px; flex-wrap: wrap; justify-content: center; max-width: 1000px; width: 100%; }
+  .board-wrap { width: min(92vw, 600px); }
+  .captured { min-height: 28px; font-size: 22px; letter-spacing: -2px; color: var(--muted); }
+  .board {
+    display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); aspect-ratio: 1;
+    border-radius: 6px; overflow: hidden; box-shadow: 0 8px 30px rgba(0,0,0,.45);
+    user-select: none; touch-action: none;
+  }
+  .sq { position: relative; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .sq.light { background: var(--light); } .sq.dark { background: var(--dark); }
+  .sq.last::before, .sq.sel::before, .sq.check::before { content: ""; position: absolute; inset: 0; }
+  .sq.last::before { background: var(--last); }
+  .sq.sel::before { background: var(--sel); }
+  .sq.check::before { background: radial-gradient(circle, var(--check) 20%, transparent 75%); }
+  .sq.hint::after {
+    content: ""; position: absolute; width: 30%; height: 30%; border-radius: 50%; background: rgba(0,0,0,.22);
+  }
+  .sq.hint.cap::after { width: 88%; height: 88%; background: none; border: 6px solid rgba(0,0,0,.22); }
+  .coord { position: absolute; font-size: 11px; font-weight: 600; pointer-events: none; }
+  .coord.f { right: 4px; bottom: 2px; } .coord.r { left: 4px; top: 2px; }
+  .sq.light .coord { color: var(--dark); } .sq.dark .coord { color: var(--light); }
+  .piece { position: relative; z-index: 1; font-size: min(10vw, 62px); line-height: 1; pointer-events: none; }
+  .piece.w { color: #fff; text-shadow: 0 0 2px #000, 0 0 1px #000, 0 2px 3px rgba(0,0,0,.4); }
+  .piece.b { color: #222; text-shadow: 0 0 1px #fff, 0 2px 3px rgba(0,0,0,.35); }
+  .piece.dragging { opacity: .3; }
+  .ghost { position: fixed; z-index: 10; pointer-events: none; transform: translate(-50%, -50%); }
+
+  .panel {
+    background: var(--panel); border-radius: 8px; padding: 18px; width: 300px; max-width: 92vw;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  h1 { font-size: 20px; margin: 0; }
+  .status { padding: 10px 12px; border-radius: 6px; background: rgba(255,255,255,.06); font-weight: 600; min-height: 42px; }
+  .status.thinking::after { content: ""; display: inline-block; width: 1em; animation: dots 1s steps(4) infinite; overflow: hidden; vertical-align: bottom; }
+  @keyframes dots { from { width: 0 } to { width: 1.2em } }
+  label { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); }
+  select, button {
+    font: inherit; color: var(--text); background: #3a3d46; border: 1px solid #4a4d57;
+    border-radius: 6px; padding: 7px 10px; cursor: pointer;
+  }
+  button:hover:not(:disabled), select:hover { background: #454955; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: #5b9443; }
+  .row { display: flex; gap: 8px; } .row > * { flex: 1; }
+  .moves {
+    background: rgba(0,0,0,.2); border-radius: 6px; padding: 8px; height: 220px; overflow-y: auto;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
+    display: grid; grid-template-columns: 32px 1fr 1fr; align-content: start; row-gap: 2px;
+  }
+  .moves .n { color: var(--muted); }
+  .moves .cur { background: rgba(106,168,79,.35); border-radius: 3px; }
+  .eval { color: var(--muted); font-size: 13px; }
+
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 20; }
+  .modal.open { display: flex; }
+  .modal-box { background: var(--panel); border-radius: 10px; padding: 18px; text-align: center; }
+  .modal-box h2 { margin: 0 0 12px; font-size: 18px; }
+  .promo-opts { display: flex; gap: 8px; }
+  .promo-opts button { width: 70px; height: 70px; font-size: 48px; padding: 0; background: var(--light); }
+  .promo-opts button:hover { background: #f5e6c8; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="board-wrap">
+    <div class="captured" id="capTop"></div>
+    <div class="board" id="board"></div>
+    <div class="captured" id="capBottom"></div>
+  </div>
+
+  <div class="panel">
+    <h1>♞ Chess vs AI</h1>
+    <div class="status" id="status"></div>
+    <label>Play as
+      <select id="color">
+        <option value="w">White</option>
+        <option value="b">Black</option>
+        <option value="r">Random</option>
+      </select>
+    </label>
+    <label>Difficulty
+      <select id="level">
+        <option value="1">Easy</option>
+        <option value="2">Medium</option>
+        <option value="3" selected>Hard</option>
+        <option value="4">Expert</option>
+      </select>
+    </label>
+    <button class="primary" id="newGame">New game</button>
+    <div class="row">
+      <button id="undo">Undo</button>
+      <button id="flip">Flip board</button>
+      <button id="hint">Hint</button>
+    </div>
+    <div class="moves" id="moves"></div>
+    <div class="eval" id="eval"></div>
+  </div>
+</div>
+
+<div class="modal" id="promo">
+  <div class="modal-box">
+    <h2>Promote to</h2>
+    <div class="promo-opts" id="promoOpts"></div>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script>
+(() => {
+  'use strict';
+  const { Game, bestMove, sqName } = Chess;
+  // Solid glyphs for both sides (coloured via CSS); ︎ stops emoji rendering on mobile.
+  const GLYPH = { k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟' };
+  const glyph = (p) => GLYPH[p.toLowerCase()] + '︎';
+  const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+
+  const $ = (id) => document.getElementById(id);
+  const boardEl = $('board'), statusEl = $('status');
+
+  let game, human, flipped, selected, legal, lastMove, thinking, over, hintMove, aiTimer, gameId = 0;
+
+  function newGame() {
+    clearTimeout(aiTimer);
+    gameId++;
+    game = new Game();
+    const c = $('color').value;
+    human = c === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : c;
+    flipped = human === 'b';
+    selected = null; lastMove = null; thinking = false; over = null; hintMove = null;
+    refresh();
+    maybeAiMove();
+  }
+
+  function refresh() {
+    legal = game.moves();
+    over = game.result();
+    render();
+  }
+
+  function render() {
+    boardEl.innerHTML = '';
+    const targets = selected === null ? [] : legal.filter((m) => m.from === selected);
+    const checkSq = game.inCheck() ? game.kings[game.turn] : -1;
+    for (let i = 0; i < 64; i++) {
+      const r = flipped ? 7 - (i >> 3) : i >> 3;
+      const f = flipped ? 7 - (i & 7) : i & 7;
+      const sq = r * 16 + f;
+      const el = document.createElement('div');
+      el.className = 'sq ' + ((r + f) % 2 ? 'dark' : 'light');
+      el.dataset.sq = sq;
+      if (lastMove && (sq === lastMove.from || sq === lastMove.to)) el.classList.add('last');
+      if (hintMove && (sq === hintMove.from || sq === hintMove.to)) el.classList.add('sel');
+      if (sq === selected) el.classList.add('sel');
+      if (sq === checkSq) el.classList.add('check');
+      const t = targets.find((m) => m.to === sq);
+      if (t) el.classList.add('hint', ...(t.captured ? ['cap'] : []));
+      const p = game.board[sq];
+      if (p) {
+        const s = document.createElement('span');
+        s.className = 'piece ' + (p === p.toUpperCase() ? 'w' : 'b');
+        s.textContent = glyph(p);
+        el.appendChild(s);
+      }
+      if ((i >> 3) === 7) el.insertAdjacentHTML('beforeend', `<span class="coord f">${'abcdefgh'[f]}</span>`);
+      if ((i & 7) === 0) el.insertAdjacentHTML('beforeend', `<span class="coord r">${8 - r}</span>`);
+      boardEl.appendChild(el);
+    }
+    renderStatus();
+    renderMoves();
+    renderCaptured();
+    $('undo').disabled = thinking || game.history.length === 0;
+    $('hint').disabled = thinking || !!over || game.turn !== human;
+  }
+
+  function renderStatus() {
+    statusEl.classList.toggle('thinking', thinking);
+    const name = (c) => (c === 'w' ? 'White' : 'Black');
+    if (over) {
+      statusEl.textContent = over.winner
+        ? `${over.winner === human ? 'You win' : 'AI wins'} by ${over.reason}!`
+        : `Draw by ${over.reason}.`;
+    } else if (thinking) {
+      statusEl.textContent = 'AI is thinking';
+    } else {
+      statusEl.textContent = `Your move (${name(human)})` + (game.inCheck() ? ' — check!' : '');
+    }
+  }
+
+  function renderMoves() {
+    const el = $('moves');
+    // Replay from the start to build SAN for every ply.
+    const replay = new Game();
+    const sans = game.history.map((h) => { const s = replay.san(h.move); replay.make(h.move); return s; });
+    let html = '';
+    for (let i = 0; i < sans.length; i += 2) {
+      const cur = (j) => (j === sans.length - 1 ? ' class="cur"' : '');
+      html += `<span class="n">${i / 2 + 1}.</span><span${cur(i)}>${sans[i]}</span><span${cur(i + 1)}>${sans[i + 1] || ''}</span>`;
+    }
+    el.innerHTML = html;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function renderCaptured() {
+    const taken = { w: [], b: [] }; // pieces captured BY each side
+    for (const h of game.history) {
+      const c = h.move.captured;
+      if (c) taken[c === c.toUpperCase() ? 'b' : 'w'].push(c);
+    }
+    const score = (arr) => arr.reduce((s, p) => s + VAL[p.toLowerCase()], 0);
+    const order = 'qrbnp';
+    const show = (side) => {
+      const arr = taken[side].slice().sort((a, b) => order.indexOf(a.toLowerCase()) - order.indexOf(b.toLowerCase()));
+      const diff = score(taken[side]) - score(taken[side === 'w' ? 'b' : 'w']);
+      return arr.map(glyph).join('') + (diff > 0 ? ` <small style="letter-spacing:0">+${diff}</small>` : '');
+    };
+    const ai = human === 'w' ? 'b' : 'w';
+    $('capTop').innerHTML = show(ai);
+    $('capBottom').innerHTML = show(human);
+  }
+
+  // ---- input (click-to-move and drag-and-drop)
+
+  let drag = null;
+
+  function sqFromPoint(x, y) {
+    const el = document.elementFromPoint(x, y);
+    const sqEl = el && el.closest('.sq');
+    return sqEl ? +sqEl.dataset.sq : null;
+  }
+
+  function canMove() { return !thinking && !over && game.turn === human; }
+
+  function ownPiece(sq) {
+    const p = game.board[sq];
+    return p && (p === p.toUpperCase() ? 'w' : 'b') === human;
+  }
+
+  boardEl.addEventListener('pointerdown', (e) => {
+    if (!canMove()) return;
+    const sq = sqFromPoint(e.clientX, e.clientY);
+    if (sq === null) return;
+    if (selected !== null && sq !== selected && legal.some((m) => m.from === selected && m.to === sq)) {
+      tryMove(selected, sq);
+      return;
+    }
+    if (ownPiece(sq)) {
+      hintMove = null;
+      const wasSelected = selected === sq;
+      selected = sq;
+      render();
+      const pieceEl = boardEl.querySelector(`[data-sq="${sq}"] .piece`);
+      const ghost = pieceEl.cloneNode(true);
+      ghost.classList.add('ghost');
+      ghost.style.fontSize = getComputedStyle(pieceEl).fontSize;
+      drag = { from: sq, ghost, pieceEl, wasSelected, moved: false, x: e.clientX, y: e.clientY };
+      boardEl.setPointerCapture(e.pointerId);
+    } else {
+      selected = null;
+      render();
+    }
+  });
+
+  boardEl.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 5) return;
+    if (!drag.moved) { drag.moved = true; document.body.appendChild(drag.ghost); drag.pieceEl.classList.add('dragging'); }
+    drag.ghost.style.left = e.clientX + 'px';
+    drag.ghost.style.top = e.clientY + 'px';
+  });
+
+  boardEl.addEventListener('pointerup', (e) => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    d.ghost.remove();
+    d.pieceEl.classList.remove('dragging');
+    const to = sqFromPoint(e.clientX, e.clientY);
+    if (d.moved && to !== null && to !== d.from && legal.some((m) => m.from === d.from && m.to === to)) {
+      tryMove(d.from, to);
+    } else if (!d.moved && d.wasSelected) {
+      selected = null; render(); // second tap on the same piece deselects
+    }
+  });
+
+  boardEl.addEventListener('pointercancel', () => {
+    if (drag) { drag.ghost.remove(); drag.pieceEl.classList.remove('dragging'); drag = null; }
+  });
+
+  async function tryMove(from, to) {
+    const options = legal.filter((m) => m.from === from && m.to === to);
+    if (!options.length) return;
+    let move = options[0];
+    if (options.length > 1) move = await choosePromotion(options);
+    if (!move) { selected = null; render(); return; }
+    play(move);
+    maybeAiMove();
+  }
+
+  function choosePromotion(options) {
+    return new Promise((resolve) => {
+      const modal = $('promo'), box = $('promoOpts');
+      box.innerHTML = '';
+      for (const m of options) {
+        const b = document.createElement('button');
+        b.textContent = glyph(m.promo);
+        b.className = 'piece ' + (human === 'w' ? 'w' : 'b');
+        b.style.pointerEvents = 'auto';
+        b.onclick = () => { modal.classList.remove('open'); resolve(m); };
+        box.appendChild(b);
+      }
+      modal.onclick = (e) => { if (e.target === modal) { modal.classList.remove('open'); resolve(null); } };
+      modal.classList.add('open');
+    });
+  }
+
+  function play(move) {
+    game.make(move);
+    lastMove = move;
+    selected = null; hintMove = null;
+    refresh();
+  }
+
+  function maybeAiMove() {
+    if (over || game.turn === human) return;
+    thinking = true;
+    render();
+    const id = gameId;
+    // Let the browser paint "thinking" before the (synchronous) search blocks the thread.
+    aiTimer = setTimeout(() => {
+      const res = bestMove(game, +$('level').value);
+      if (id !== gameId) return;
+      thinking = false;
+      if (res) {
+        const s = res.score * (game.turn === 'w' ? 1 : -1);
+        $('eval').textContent = Math.abs(s) > 90000
+          ? `AI sees mate for ${s > 0 ? 'White' : 'Black'}`
+          : `AI eval: ${(s / 100 >= 0 ? '+' : '') + (s / 100).toFixed(2)} (White's view) · ${res.nodes.toLocaleString()} nodes`;
+        play(res.move);
+      } else {
+        render();
+      }
+    }, 60);
+  }
+
+  $('newGame').onclick = newGame;
+  $('flip').onclick = () => { flipped = !flipped; render(); };
+  $('undo').onclick = () => {
+    if (thinking) return;
+    game.undo();
+    if (game.turn !== human) game.undo(); // take back the AI's reply too
+    const h = game.history[game.history.length - 1];
+    lastMove = h ? h.move : null;
+    selected = null; hintMove = null;
+    refresh();
+    maybeAiMove(); // if playing Black and we undid to the start, AI moves again
+  };
+  $('hint').onclick = () => {
+    if (!canMove()) return;
+    statusEl.textContent = 'Finding a hint…';
+    setTimeout(() => {
+      const res = bestMove(game, 3);
+      if (res) { hintMove = res.move; selected = null; render(); }
+    }, 30);
+  };
+
+  newGame();
+})();
+</script>
+</body>
+</html>

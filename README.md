@@ -4,6 +4,8 @@ A chess game you play in the browser against a computer opponent. It has no depe
 
 **To play:** open `index.html` in any modern browser.
 
+**Play online:** https://tarxander.github.io/Chess-random/ (served by GitHub Pages from this branch).
+
 ## Features
 - **Two modes**, switched with the Classic / Random toggle at the top of the panel:
   - **Classic:** standard chess (the default).

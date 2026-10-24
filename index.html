@@ -61,6 +61,11 @@
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
   button.primary:hover { background: #5b9443; }
   .row { display: flex; gap: 8px; } .row > * { flex: 1; }
+  .modes { display: flex; background: rgba(0,0,0,.25); border-radius: 8px; padding: 4px; gap: 4px; }
+  .modes button { flex: 1; border: none; background: none; color: var(--muted); font-weight: 600; }
+  .modes button:hover:not(.on) { background: rgba(255,255,255,.06); }
+  .modes button.on { background: var(--accent); color: #fff; }
+  .mode-desc { margin: -6px 0 0; font-size: 13px; color: var(--muted); }
   .moves {
     background: rgba(0,0,0,.2); border-radius: 6px; padding: 8px; height: 220px; overflow-y: auto;
     font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
@@ -88,19 +93,18 @@
   </div>
 
   <div class="panel">
-    <h1>♞ Chess vs AI</h1>
+    <h1 id="title">♞ Chess vs AI</h1>
+    <div class="modes" role="tablist">
+      <button data-mode="classic" role="tab">Classic</button>
+      <button data-mode="random" role="tab">Random</button>
+    </div>
+    <p class="mode-desc" id="modeDesc"></p>
     <div class="status" id="status"></div>
     <label>Play as
       <select id="color">
         <option value="w">White</option>
         <option value="b">Black</option>
         <option value="r">Random</option>
-      </select>
-    </label>
-    <label>Starting pieces
-      <select id="setup">
-        <option value="random">Randomized</option>
-        <option value="classic">Classic</option>
       </select>
     </label>
     <label>Difficulty
@@ -162,12 +166,30 @@
     return `${randomBackRank()}/pppppppp/8/8/8/8/PPPPPPPP/${randomBackRank().toUpperCase()} w - - 0 1`;
   }
 
+  const MODES = {
+    classic: { title: '♞ Chess vs AI', desc: 'Standard chess.' },
+    random: { title: '🎲 Random Chess vs AI', desc: 'Both sides\u2019 back-row pieces are shuffled every game. No castling.' },
+  };
+  let mode = 'classic';
+
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll('.modes button').forEach((b) => {
+      b.classList.toggle('on', b.dataset.mode === m);
+      b.setAttribute('aria-selected', b.dataset.mode === m);
+    });
+    $('title').textContent = MODES[m].title;
+    $('modeDesc').textContent = MODES[m].desc;
+    newGame();
+  }
+
   let startFen, game, human, flipped, selected, legal, lastMove, thinking, over, hintMove, aiTimer, gameId = 0;
 
   function newGame() {
     clearTimeout(aiTimer);
     gameId++;
-    startFen = $('setup').value === 'random' ? randomStartFen() : Chess.START;
+    startFen = mode === 'random' ? randomStartFen() : Chess.START;
+    $('eval').textContent = '';
     game = new Game(startFen);
     const c = $('color').value;
     human = c === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : c;
@@ -388,6 +410,7 @@
   }
 
   $('newGame').onclick = newGame;
+  document.querySelectorAll('.modes button').forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
   $('flip').onclick = () => { flipped = !flipped; render(); };
   $('undo').onclick = () => {
     if (thinking) return;
@@ -408,7 +431,7 @@
     }, 30);
   };
 
-  newGame();
+  setMode('classic');
 })();
 </script>
 </body>

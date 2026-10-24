@@ -5,9 +5,10 @@ A chess game you play in the browser against a computer opponent. It has no depe
 **To play:** open `index.html` in any modern browser.
 
 ## Features
-- **Randomized start** (default): each side's back-row pieces are shuffled separately every game.
-  Bishops always land on opposite colours and castling is disabled. Switch "Starting pieces" to
-  Classic for the normal setup.
+- **Two modes**, switched with the Classic / Random toggle at the top of the panel:
+  - **Classic:** standard chess (the default).
+  - **Random:** each side's back-row pieces are shuffled separately every game. Bishops always
+    land on opposite colours and castling is disabled.
 - Full rules: castling, en passant, promotion (with a piece picker), check, checkmate, stalemate,
   the 50-move rule, threefold repetition and insufficient material
 - Move by clicking or by dragging pieces (works with touch)
